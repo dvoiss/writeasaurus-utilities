@@ -23,7 +23,7 @@ class LoggingColors:
     END     = '\033[0;m'
 
 # an internal schema to use:
-class PromptSchema:
+class Schema:
 
     # data-bases:
     TEST_DB_NAME = "writeasaurus.test.db"
@@ -32,6 +32,7 @@ class PromptSchema:
 
     # table:
     TABLE_NAME = "prompts"
+    STORY_TABLE_NAME = "stories"
 
     # columns:
     COLUMN_ID = "id"
@@ -43,6 +44,12 @@ class PromptSchema:
     # release columns:
     COLUMN_SKIPPED = "skipped"
     COLUMN_COMPLETED = "completed"
+
+    # we're creating an empty story table for our DB for when we transfer it to android,
+    # that way we're ready to go without having to have our android code manage SQL upgrades, creates, deletes, etc.
+    # story table oclumns:
+    COLUMN_STORY = "story"
+
 
     # queries:
     QUERY_CREATE_TABLE = "CREATE TABLE IF NOT EXISTS %s (%s INTEGER PRIMARY KEY AUTOINCREMENT, %s TEXT, %s TEXT, %s TEXT UNIQUE, %s INTEGER DEFAULT 0)" % (TABLE_NAME, COLUMN_ID, COLUMN_DESCRIPTION, COLUMN_EXTRA_TEXT, COLUMN_SOURCE_ID, COLUMN_TIMESTAMP)
@@ -56,14 +63,12 @@ class PromptSchema:
     QUERY_SELECT = "SELECT * FROM %s" % TABLE_NAME
     QUERY_SELECT_ALL_SLUGS = "SELECT %s FROM %s" % (COLUMN_SOURCE_ID, TABLE_NAME)
 
+    QUERY_CREATE_STORY_TABLE = "CREATE TABLE IF NOT EXISTS %s (%s INTEGER PRIMARY KEY AUTOINCREMENT, %s TEXT, %s TEXT, %s INTEGER DEFAULT 0)" % (STORY_TABLE_NAME, COLUMN_ID, COLUMN_STORY, COLUMN_DESCRIPTION, COLUMN_TIMESTAMP)
+    QUERY_DROP_STORY_TABLE = "DROP TABLE IF EXISTS %s" % STORY_TABLE_NAME
+
     QUERY_RELEASE_CREATE_TABLE = "CREATE TABLE IF NOT EXISTS %s (%s INTEGER PRIMARY KEY AUTOINCREMENT, %s TEXT, %s INTEGER DEFAULT 0, %s INTEGER DEFAULT 0)" % (TABLE_NAME, COLUMN_ID, COLUMN_DESCRIPTION, COLUMN_SKIPPED, COLUMN_COMPLETED)
     QUERY_RELEASE_INSERT_MANY = "INSERT INTO %s VALUES(?, ?, ?, ?)" % TABLE_NAME
     QUERY_RELEASE_SELECT_COLUMNS = "SELECT %s FROM %s" % (COLUMN_DESCRIPTION, TABLE_NAME)
-
-class LogSchema:
-    pass
-class StorySchema:
-    pass
 
 # handles all interaction with the DB:
 # opening, closing, creating, deleting, querying, etc.
@@ -71,15 +76,15 @@ class PromptsDatabaseHelper(object):
 
     @classmethod
     def get_test_database(cls):
-        return cls(PromptSchema.TEST_DB_NAME)
+        return cls(Schema.TEST_DB_NAME)
 
     @classmethod
     def get_dev_database(cls):
-        return cls(PromptSchema.DEV_DB_NAME)
+        return cls(Schema.DEV_DB_NAME)
 
     @classmethod
     def get_release_database(cls):
-        return cls(PromptSchema.PROD_DB_NAME)
+        return cls(Schema.PROD_DB_NAME)
 
     # constructor:
 
@@ -108,51 +113,59 @@ class PromptsDatabaseHelper(object):
             self.connection.close()
 
     def insert(self, value):
-        self.execute_single(PromptSchema.QUERY_INSERT_SINGLE, value)
+        self.execute_single(Schema.QUERY_INSERT_SINGLE, value)
         self.connection.commit()
 
     def insert_many(self, values):
-        if self.database == PromptSchema.PROD_DB_NAME:
-            self.execute_many(PromptSchema.QUERY_RELEASE_INSERT_MANY, values)
+        if self.database == Schema.PROD_DB_NAME:
+            self.execute_many(Schema.QUERY_RELEASE_INSERT_MANY, values)
         else:
-            self.execute_many(PromptSchema.QUERY_INSERT_MANY, values)
+            self.execute_many(Schema.QUERY_INSERT_MANY, values)
         self.connection.commit()
 
     def select_one(self):
-        self.execute(PromptSchema.QUERY_SELECT)
+        self.execute(Schema.QUERY_SELECT)
         return self.cursor.fetchone()
 
     def select_all(self):
-        self.execute(PromptSchema.QUERY_SELECT)
+        self.execute(Schema.QUERY_SELECT)
         return self.cursor.fetchall()
 
     def select_release_columns(self):
-        self.execute(PromptSchema.QUERY_RELEASE_SELECT_COLUMNS)
+        self.execute(Schema.QUERY_RELEASE_SELECT_COLUMNS)
         return self.cursor.fetchall()
 
     def select_all_slugs(self):
-        self.execute(PromptSchema.QUERY_SELECT_ALL_SLUGS)
+        self.execute(Schema.QUERY_SELECT_ALL_SLUGS)
         return self.cursor.fetchall()
 
     def create_table(self):
-        if self.database == PromptSchema.PROD_DB_NAME:
-            self.execute(PromptSchema.QUERY_RELEASE_CREATE_TABLE)
+        if self.database == Schema.PROD_DB_NAME:
+            self.execute(Schema.QUERY_RELEASE_CREATE_TABLE)
         else:
-            self.execute(PromptSchema.QUERY_CREATE_TABLE)
+            self.execute(Schema.QUERY_CREATE_TABLE)
+        self.connection.commit()
+
+    def create_story_table(self):
+        self.execute(Schema.QUERY_CREATE_STORY_TABLE)
         self.connection.commit()
 
     def drop_table(self):
-        self.execute(PromptSchema.QUERY_DROP_TABLE)
+        self.execute(Schema.QUERY_DROP_TABLE)
+        self.connection.commit()
+
+    def drop_story_table(self):
+        self.execute(Schema.QUERY_DROP_STORY_TABLE)
         self.connection.commit()
 
     def update(self):
-        self.execute_single(PromptSchema.QUERY_INSERT_SINGLE, value)
+        self.execute_single(Schema.QUERY_INSERT_SINGLE, value)
         self.connection.commit()
 
     def cleanup(self):
         self.close()
-        if self.database == PromptSchema.TEST_DB_NAME:
-            os.remove(PromptSchema.TEST_DB_NAME)
+        if self.database == Schema.TEST_DB_NAME:
+            os.remove(Schema.TEST_DB_NAME)
 
 # entry-point when run as script:
 if __name__ == "__main__":
