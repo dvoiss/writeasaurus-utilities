@@ -29,7 +29,7 @@ from writeasaurus_library import *
 def fetch_reddit(username, password):
     # login using python reddit api wrapper - praw
     pp("login to reddit")
-    r = praw.Reddit('/u/daveasaurus\'s Writing Prompts script for "Writeasaurus" app. http://dvoiss.com')
+    r = praw.Reddit('/u/daveasaurus\'s Writing Prompts script for "Writeasaurus" app. http://github.com/dvoiss')
     if username and password:
         r.login(username, password)
     else:
@@ -121,11 +121,11 @@ def fetch_reddit(username, password):
 # the test option -t runs some small tests which prints output
 def main(argv):
     file_name = argv[0]
-    help_text = LoggingColors.FAIL + file_name + " -t <run-test> -u <username> -p <password>" + LoggingColors.END
+    help_text = LoggingColors.FAIL + file_name + " -u <username> -p <password>" + LoggingColors.END
     
     try:
         passed_args = argv[1:]
-        opts, args = getopt.getopt(passed_args, "htu:p:", ["username=","password="])
+        opts, args = getopt.getopt(passed_args, "hu:p:", ["username=","password="])
     except getopt.GetoptError:
         print help_text
         sys.exit(2)
@@ -136,20 +136,17 @@ def main(argv):
         if opt == '-h':
             print help_text
             sys.exit()
-        elif opt in ("-t", "--run-test"):
-            test() # do tests
-            sys.exit()
         elif opt in ("-u", "--username"):
             username = arg
         elif opt in ("-p", "--password"):
             password = arg
 
     # and off we go:
+    pp("starting main...")
     fetch_reddit(username, password)
 
 
 # entry-point:
 if __name__ == "__main__":
-    pp("starting main...")
     main(sys.argv)
 

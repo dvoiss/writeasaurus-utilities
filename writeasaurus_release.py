@@ -120,7 +120,7 @@ def release(filter = True):
 # the test option -t runs some small tests which prints output
 def main(argv):
     file_name = argv[0]
-    help_text = LoggingColors.FAIL + file_name + " -f <filter>" + LoggingColors.END
+    help_text = LoggingColors.FAIL + file_name + " -f" + LoggingColors.END
     
     try:
         passed_args = argv[1:]
@@ -137,9 +137,9 @@ def main(argv):
             release(True)
             sys.exit()
 
+    pp("starting main...")
     release(False)
 
 # entry-point:
 if __name__ == "__main__":
-    pp("starting main...")
     main(sys.argv)
