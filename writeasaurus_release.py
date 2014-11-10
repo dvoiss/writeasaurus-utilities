@@ -41,8 +41,14 @@ def release(filter = True):
         return
 
     approved_rows = []
-    if filter:
+    rejected_rows = []
+    if filter == False:
+        # don't filter the rows in any way:
+        approved_rows = rows
+    else:
         pp("preparing to filter rows...")
+
+        pp("Is the description text OK? enter new text if not, otherwise enter 'y' for yes or 'n' to reject the row")
         # approve each row individually, edit them as needed:
         for dev_row in rows:
             description = dev_row[0]
@@ -57,24 +63,26 @@ def release(filter = True):
             # reject row:
             elif user_input.lower() == 'n':
                 pp(LoggingColors.FAIL + "Rejected row" + LoggingColors.END)
-                continue # for loop
+                rejected_rows.append(dev_row)
             # edit row:
             else:
                 while True:
+                    description = user_input
                     pp(LoggingColors.OK + "Accepted edited row:\n" + LoggingColors.FAIL + "\"" + user_input + "\"" + LoggingColors.END)
                     pp("Is the edited text OK? enter new text if not, otherwise enter 'y' for yes or 'n' to reject the row")
 
                     user_input = raw_input()
-                    # is 
                     if user_input.lower() == 'y':
+                        # accepted new description
+                        dev_row[0] = description
                         approved_rows.append(dev_row)
+                        break # out of while loop
                     elif user_input.lower() == 'n':
+                        rejected_rows.append(dev_row)
                         break # out of while loop
                     else:
-                        # entered new text
+                        # entered new text, check whether it's okay
                         pass # the while loop continues, and the user_input var is edited to the new text
-    else:
-        approved_rows = rows
 
     # build release rows, format below:
     def build_release_row(dev_row):
@@ -89,12 +97,17 @@ def release(filter = True):
     pp("creating release database helper")
     release_helper = PromptsDatabaseHelper.get_release_database()
 
+    # reset tables:
     release_helper.drop_story_table()
     release_helper.create_story_table()
 
     release_helper.drop_table()
     release_helper.create_table()
+
+    # insert the rows:
     release_helper.insert_many(final_rows)
+
+    # now retrieve all:
     final_rows = release_helper.select_all()
     release_helper.close()
 
