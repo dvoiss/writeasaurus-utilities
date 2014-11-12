@@ -14,106 +14,126 @@ it's a one off to get some data into a sqlite database.
 import sqlite3
 import sys, os, getopt
 
+# makes it easier to edit text, arrows keys are characters and raw_input accepts lines only
+# readline allows the user to use the arrow keys and not have it go: "abc...^[[C^[[D^[[C^[[D^[[D"
+import readline
+
 # our little lib with our schema and it's helper
 from writeasaurus_library import *
 
+# global in the script:
+release_helper = PromptsDatabaseHelper.get_release_database()
 
 # main release
 # filters rows one by one
 def release(filter = True):
-    pp("creating dev database helper")
+    pp("re-creating release tables")
+
+    # reset tables:
+    release_helper.drop_story_table()
+    release_helper.create_story_table()
+    release_helper.drop_table()
+    release_helper.create_table()
+
+    pp("getting dev database helper")
     dev_helper = PromptsDatabaseHelper.get_dev_database()
-    
+
     # the set of columns from the dev table to transfer
     rows = dev_helper.select_release_columns()
     if rows == None:
         rows = []
 
-    # close:
-    dev_helper.close()
-
     # output number of entries:
     num_current = len(rows)
-    pp("You currently have %s entries in the dev DB" % num_current)
 
     if (num_current == 0):
-        pp("There is no data to prepare...exiting")
+        pp("There are no rows. no data to prepare. exiting")
         return
 
-    approved_rows = []
-    rejected_rows = []
-    if filter == False:
-        # don't filter the rows in any way:
-        approved_rows = rows
-    else:
-        pp("preparing to filter rows...")
+    pp("You currently have %s entries in the dev DB" % num_current)
 
-        pp("Is the description text OK? enter new text if not, otherwise enter 'y' for yes or 'n' to reject the row")
-        # approve each row individually, edit them as needed:
-        for dev_row in rows:
-            description = dev_row[0]
-            pp(description)
+    pp("preparing to filter rows...")
 
-            user_input = raw_input()
+    # don't put this in the for loop, we don't need directions each time:
+    pp("Is the description text OK? enter new text if not, otherwise enter 'y' for yes or 'n' to reject the row")
 
-            # accept row:
-            if user_input.lower() == 'y':
-                pp(LoggingColors.OK + "Accepted row as is" + LoggingColors.END)
-                approved_rows.append(dev_row)
-            # reject row:
-            elif user_input.lower() == 'n':
-                pp(LoggingColors.FAIL + "Rejected row" + LoggingColors.END)
-                rejected_rows.append(dev_row)
-            # edit row:
-            else:
-                while True:
-                    description = user_input
-                    pp(LoggingColors.OK + "Accepted edited row:\n" + LoggingColors.FAIL + "\"" + user_input + "\"" + LoggingColors.END)
-                    pp("Is the edited text OK? enter new text if not, otherwise enter 'y' for yes or 'n' to reject the row")
+    # track these:
+    rejected_ids = []
+    accepted_ids = []
 
-                    user_input = raw_input()
-                    if user_input.lower() == 'y':
-                        # accepted new description
-                        dev_row[0] = description
-                        approved_rows.append(dev_row)
-                        break # out of while loop
-                    elif user_input.lower() == 'n':
-                        rejected_rows.append(dev_row)
-                        break # out of while loop
-                    else:
-                        # entered new text, check whether it's okay
-                        pass # the while loop continues, and the user_input var is edited to the new text
+    # approve each row individually, edit them as needed:
+    for dev_row in rows:
+        reddit_id = dev_row[1]
+        try:
+            if (rejected_ids.index(reddit_id) or accepted_ids.index(reddit_id)):
+                continue
+        except ValueError:
+            pass
 
-    # build release rows, format below:
-    def build_release_row(dev_row):
-        # id, description, skipped, completed
-        release_row = (None, dev_row[0], 0, 0)
-        return release_row
+        description = dev_row[0]
+        pp(description)
 
-    # prepare the data:
-    final_rows = map(build_release_row, approved_rows)
+        user_input = raw_input()
 
-    # create the release DB and transfer the rows over
-    pp("creating release database helper")
-    release_helper = PromptsDatabaseHelper.get_release_database()
+        # accept row:
+        if user_input.lower() == 'y':
+            accepted_ids.append(reddit_id)
+            insert(description)
+        # reject row:
+        elif user_input.lower() == 'n':
+            delete(reddit_id)
+            rejected_ids.append(reddit_id)
+        # edit row:
+        else:
+            while True:
+                description = user_input
+                pp(LoggingColors.OK + "Accepted edited row:\n" + LoggingColors.FAIL + "\"" + user_input + "\"" + LoggingColors.END)
+                pp("Is the edited text OK? enter new text if not, otherwise enter 'y' for yes or 'n' to reject the row")
 
-    # reset tables:
-    release_helper.drop_story_table()
-    release_helper.create_story_table()
+                user_input = raw_input()
+                if user_input.lower() == 'y':
+                    # accepted new description,
+                    # tuple is immutable:
+                    accepted_ids.append(reddit_id)
+                    insert(description)
+                    break # out of while loop
+                elif user_input.lower() == 'n':
+                    rejected_ids.append(reddit_id)
+                    delete(reddit_id)
+                    break # out of while loop
+                else:
+                    # entered new text, check whether it's okay
+                    pass # the while loop continues, and the user_input var is edited to the new text
 
-    release_helper.drop_table()
-    release_helper.create_table()
+    num_rejected = len(rejected_ids)
+    pp("You rejected %s entries from the release DB" % num_rejected)
+    print(rejected_ids)
 
-    # insert the rows:
-    release_helper.insert_many(final_rows)
+    num_accepted = len(accepted_ids)
+    pp("You accepted %s entries in the release DB" % num_accepted)
+    print(num_accepted)
 
-    # now retrieve all:
+    # validation: retrieve all
     final_rows = release_helper.select_all()
     release_helper.close()
-
     num_current = len(final_rows)
     pp("You now have %s entries in the release DB" % num_current)
 
+# delete row:
+def delete(id):
+    pp(LoggingColors.FAIL + "Rejected row" + LoggingColors.END)
+    release_helper.delete(id)
+
+# insert row:
+def insert(description):
+    # build release rows, format below:
+    def build_release_row(description):
+        # id, description, skipped, completed
+        release_row = (None, description, 0, 0)
+        return release_row
+
+    pp(LoggingColors.OK + "Accepted row as is" + LoggingColors.END)
+    release_helper.insert(build_release_row(description))
 
 # main entry-point:
 # parse username and password options,
@@ -121,7 +141,7 @@ def release(filter = True):
 def main(argv):
     file_name = argv[0]
     help_text = LoggingColors.FAIL + file_name + " -f" + LoggingColors.END
-    
+
     try:
         passed_args = argv[1:]
         opts, args = getopt.getopt(passed_args, "hf")

@@ -58,6 +58,7 @@ class Schema:
 
     QUERY_INSERT_SINGLE = "INSERT INTO %s VALUES(?, ?, ?, ?, ?)" % TABLE_NAME
     QUERY_INSERT_MANY = "INSERT INTO %s VALUES(?, ?, ?, ?, ?)" % TABLE_NAME
+    QUERY_DELETE_SINGLE = "DELETE FROM %s WHERE %s = ?" % (TABLE_NAME, COLUMN_ID)
 
     QUERY_UPDATE = "UPDATE %s SET %s = ? WHERE %s = ?" % (TABLE_NAME, COLUMN_DESCRIPTION, COLUMN_ID)
     QUERY_SELECT = "SELECT * FROM %s" % TABLE_NAME
@@ -68,7 +69,7 @@ class Schema:
 
     QUERY_RELEASE_CREATE_TABLE = "CREATE TABLE IF NOT EXISTS %s (%s INTEGER PRIMARY KEY AUTOINCREMENT, %s TEXT, %s INTEGER DEFAULT 0, %s INTEGER DEFAULT 0)" % (TABLE_NAME, COLUMN_ID, COLUMN_DESCRIPTION, COLUMN_SKIPPED, COLUMN_COMPLETED)
     QUERY_RELEASE_INSERT_MANY = "INSERT INTO %s VALUES(?, ?, ?, ?)" % TABLE_NAME
-    QUERY_RELEASE_SELECT_COLUMNS = "SELECT %s FROM %s" % (COLUMN_DESCRIPTION, TABLE_NAME)
+    QUERY_RELEASE_SELECT_COLUMNS = "SELECT %s, %s FROM %s" % (COLUMN_DESCRIPTION, COLUMN_SOURCE_ID, TABLE_NAME)
 
 # handles all interaction with the DB:
 # opening, closing, creating, deleting, querying, etc.
@@ -116,6 +117,13 @@ class PromptsDatabaseHelper(object):
         self.execute_single(Schema.QUERY_INSERT_SINGLE, value)
         self.connection.commit()
 
+    def insert(self, value):
+        if self.database == Schema.PROD_DB_NAME:
+            self.execute_single(Schema.QUERY_RELEASE_INSERT_MANY, value)
+        else:
+            self.execute_single(Schema.QUERY_INSERT_MANY, value)
+        self.connection.commit()
+
     def insert_many(self, values):
         if self.database == Schema.PROD_DB_NAME:
             self.execute_many(Schema.QUERY_RELEASE_INSERT_MANY, values)
@@ -138,6 +146,9 @@ class PromptsDatabaseHelper(object):
     def select_all_slugs(self):
         self.execute(Schema.QUERY_SELECT_ALL_SLUGS)
         return self.cursor.fetchall()
+
+    def delete(self, id):
+        self.execute_single(Schema.QUERY_DELETE_SINGLE, [id])
 
     def create_table(self):
         if self.database == Schema.PROD_DB_NAME:
@@ -193,17 +204,22 @@ if __name__ == "__main__":
     # a couple prompts with current unix time as int type to be stored:
     prompts = (
         (1, "A test description", "Source ID (Reddit ID)", "extra-text", int(time.time())),
-        (2, "Another description", "Source ID (Different Source ID)", "extra-text-2", int(time.time()))
+        (2, "Another description", "Source ID (Different Reddit ID)", "extra-text-2", int(time.time()))
     )
     helper.insert_many(prompts)
-
-    pp("select recently inserted data:")
-    rows = helper.select_all()
-    pp(rows)
 
     pp("select the most recent ID:")
     row = helper.select_one()
     pp(row[2])
+
+    pp("select recently inserted rows:")
+    rows = helper.select_all()
+    pp(rows)
+
+    pp("delete the most recent ID,\nthen get all rows again:")
+    row = helper.delete(row[0])
+    rows = helper.select_all()
+    pp(rows)
 
     pp("resetting database")
     helper.drop_table()
